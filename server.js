@@ -3,32 +3,29 @@ import bodyParser from 'body-parser';
 import cors from 'cors';
 import mongoose from 'mongoose';
 
-const mongoURL = process.env.MONGO_URL || 'mongodb://localhost/Validation';
+//created connection to mongo database
+const mongoURL = process.env.MONGO_URL || 'mongodb://localhost/post-codealong';
 mongoose.connect(mongoURL, { useNewUrlParser: true, useUnifiedTopology: true });
 mongoose.Promise = Promise;
 
-//create a model for mongo db
-const Person = mongoose.model('Person', {
-  name: {
+// created a model for the tasks with some validation rules
+const Task = mongoose.model('Task', {
+  text: {
     type: String,
     required: true,
-    minlength: 2,
-    maxlength: 500,
+    minlength: 5,
   },
-  height: {
-    type: Number,
-    required: true,
-    min: 5,
+  complete: {
+    type: Boolean,
+    default: false,
   },
-  birthdate: {
+  createdAt: {
     type: Date,
     default: Date.now,
   },
 });
 
-new Person({ name: 'Malwina', height: 180 }).save();
-
-const port = process.env.PORT || 1080;
+const port = process.env.PORT || 2080;
 const app = express();
 
 // Add middlewares to enable cors and json body parsing
@@ -40,23 +37,30 @@ app.get('/', (req, res) => {
   res.send('Hello hello');
 });
 
-// http://localhost:7080/people - get all people from the database
-app.post('/people', async (req, res) => {
+// using express to create an endpoint that returns all tasks
+app.get('/tasks', async (req, res) => {
+  const tasks = await Task.find().sort({ createdAt: 'desc' }).limit(20).exec();
+  res.json(tasks);
+});
+
+// using express to add a new task to the database
+app.post('/tasks', async (req, res) => {
+  // retrieve information sent by client to our API endpoint
+  const { text, complete } = req.body;
+  // use our mongoose model to create the database entry
+  const task = new Task({ text, complete });
   try {
-    // success case
-    //async await is a promise that will wait for the response
-    const person = await new Person(req.body).save();
-    res.status(200).json(person);
+    // success
+    const savedTask = await task.save();
+    res.status(201).json(savedTask);
   } catch (err) {
+    // bad request
     res
       .status(400)
-      .json({ message: 'Could not save person', error: err.errors });
+      .json({ message: 'Could not save task to database', errors: err.errors });
   }
-  // above or below
-  // const person = new Person(req.body); //create a new person based on the model
-  // const savedPerson = await person.save(); //save the person to the database and wait for the response
-  // res.json(savedPerson) //return the saved person in the response
 });
+
 // Start the server
 app.listen(port, () => {
   console.log(`Server running on http://localhost:${port}`);
